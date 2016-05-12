@@ -1,0 +1,27 @@
+{
+  "name": "cnki-crawler",
+  "version": "1.0.0",
+  "description": "a crawler for cnki.net",
+  "main": "index.js",
+  "scripts": {
+    "test": "no test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/x-web/cnki-crawler.git"
+  },
+  "keywords": [
+    "crawler",
+    "selenium-webdriver",
+    "cnki.net"
+  ],
+  "author": "x-web",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/x-web/cnki-crawler/issues"
+  },
+  "homepage": "https://github.com/x-web/cnki-crawler#readme",
+  "dependencies": {
+    "selenium-webdriver": "^2.53.2"
+  }
+}
