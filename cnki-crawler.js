@@ -5,14 +5,13 @@ var webdriver = require('selenium-webdriver'),
   By = webdriver.By,
   until = webdriver.until,
   error = webdriver.error,
+  Key = webdriver.Key,
   chrome = require('selenium-webdriver/chrome'),
   proxy = require('selenium-webdriver/proxy');
 
 var Logger = require('./logger');
 var Util = require('./util');
 
-// cookie file
-const COOKIE = 'cookies-5730.pkl';
 // 5730 index page for login
 const INDEX = 'http://www.5730.net';
 // download enterance
@@ -45,16 +44,19 @@ var CnkiCrawler = function (options) {
     }
   }
 
+  // cookie file
+  var COOKIE = 'cookies-' + _config['username'] + '.pkl';
+
   // logger
   var _logger = new Logger(_config['date']);
 
   // chrome option
   var chromeOption = new chrome.Options();
   chromeOption.setUserPreferences({
-    "download.default_directory": _logger.LOGS + _logger.path.day
+    "download.default_directory": _logger.path.day
   });
-  chromeOption.addArguments('--proxy-server=http://115.28.206.230:3128');
-  chromeOption.setProxy(proxy.manual({http: '115.28.206.230:3128'}));
+  // chromeOption.addArguments('--proxy-server=http://115.28.206.230:3128');
+  // chromeOption.setProxy(proxy.manual({http: '115.28.206.230:3128'}));
 
   // chrome driver
   var _driver = new webdriver.Builder()
@@ -64,24 +66,25 @@ var CnkiCrawler = function (options) {
       .build();
 
   return {
-    init: init
+    start: start
   };
 
   function gotoResultFrame() {
-    _driver.wait(until.elementLocated(By.id('iframeResult')), 60 * 1000, 'load result timeout.\nquit.');
-    _driver.switchTo().frame('iframeResult').then(function () {
+    _driver.wait(until.elementLocated(By.id('iframeResult')), 60 * 1000, 'load result timeout.\nquit.').then(function () {
+      return _driver.switchTo().frame('iframeResult');
+    }).then(function () {
       console.log('result iframe loaded.');
-      _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), 30 * 1000, 'wait 50 per page timeout.\nquit.');
-      try {
-        // sort
-        _driver.findElement(By.partialLinkText('报纸日期')).click();
-        _driver.findElement(By.partialLinkText('报纸日期')).click();
-        // click 50 per page
-        _driver.findElement(By.css('#id_grid_display_num a:last-child')).click();
-        getResults();
-      } catch (e) {
-        console.log(e);
-      }
+      return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), 30 * 1000, 'wait 50 per page timeout.\nquit.');
+    }).then(function () {
+      // sort
+      return _driver.findElement(By.partialLinkText('报纸日期')).click();
+    }).then(function () {
+      return _driver.findElement(By.partialLinkText('报纸日期')).click();
+    }).then(function () {
+      // click 50 per page
+      return _driver.findElement(By.css('#id_grid_display_num a:last-child')).click();
+    }).then(function () {
+      getResults();
     });
   };
 
@@ -104,55 +107,79 @@ var CnkiCrawler = function (options) {
 
   function search() {
     try {
-      console.log('set data source...');
-      _driver.findElement(By.id('txt_1_sel')).findElement(By.css('option[value="LY"]')).click();
-      _driver.findElement(By.id('txt_1_value1')).sendKeys(_config['source']);
-      console.log('set search scope...');
-      _driver.findElement(By.id('publishdate_from')).sendKeys(_config['date']);
-      _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
-      _driver.findElement(By.id('btnSearch')).click();
-      console.log('ready to download ' + _config['date'] + ' ...');
-      gotoResultFrame();
+      _driver.findElement(By.id('txt_1_sel')).findElement(By.css('option[value="LY"]')).click().then(function () {
+        console.log('set data source...');
+        return _driver.findElement(By.id('txt_1_value1')).sendKeys(_config['source']);
+      }).then(function () {
+        console.log('set search date_from...');
+        return _driver.findElement(By.id('publishdate_from')).sendKeys(_config['date']);
+      }).then(function () {
+        console.log('set search date_to...');
+        return _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
+      }).then(function () {
+        console.log('click search')
+        return _driver.findElement(By.id('btnSearch')).click();
+      }).then(function () {
+        gotoResultFrame();
+      });
     } catch (e) {
       console.log(e);
     }
   };
 
-  function init() {
-    _driver.get('http://www.ip138.com/');
-    return;
+  function start() {
     _driver.get(INDEX);
     login(function () {
-      _driver.findElement(By.partialLinkText('知网数据库')).click();
-
-      switchWindow('知网数据库_5730');
-      _driver.executeScript('window.scrollTo(0, document.body.scrollHeight);').then(function () {
-        _driver.findElement(By.css('a[href="' + ENTER[_config['enter']] + '"]')).click();
+      _driver.findElement(By.partialLinkText('知网数据库')).click().then(function () {
+        switchWindow('知网数据库_5730');
+        return _driver.executeScript('window.scrollTo(0, document.body.scrollHeight);');
+      }).then(function () {
+          return _driver.findElement(By.css('a[href="' + ENTER[_config['enter']] + '"]')).click();
+      }).then(function () {
         // enter 46 different
         if (_config['enter'] === '46') {
-          _driver.switchTo().alert().accept().then(function () {
-            _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), 30 * 1000, 'wait KDN timeout.\nquit.');
-            _driver.findElement(By.partialLinkText('知识发现网络')).click();
+          _driver.switchTo().alert().thenCatch(function (e) {
+            if (!e instanceof error.NoSuchAlertError) {
+              console.log(e);
+            }
+          }).then(function (alert) {
+            _driver.sleep(10 * 1000).then(function () {
+              switchWindow('选择平台入口');
+              return _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), 30 * 1000, 'wait KDN timeout.\nquit.');
+            }).then(function () {
+              return _driver.findElement(By.partialLinkText('知识发现网络')).click();
+            }).then(function () {
+              gotoEnter();
+            });
           }, function (e) {
             console.log(e);
           });
+        } else {
+          gotoEnter();
         }
 
-        console.log('goto enter ' + _config['enter']);
-        switchWindow('中国重要报纸全文数据库');
-        _driver.wait(until.elementLocated(By.id('CCND')), 30 * 1000, 'wait CCND timeout.\nquit.');
-        _driver.findElement(By.id('CCND')).findElement(By.css('a')).click();
-        _driver.findElement(By.id('advacneId')).click();
-        search();
+        function gotoEnter() {
+          console.log('goto enter ' + _config['enter']);
+          switchWindow('中国重要报纸全文数据库');
+          _driver.wait(until.elementLocated(By.id('CCND')), 30 * 1000, 'wait CCND timeout.\nquit.').then(function () {
+            return _driver.findElement(By.id('CCND')).findElement(By.css('a')).click();
+          }).then(function () {
+            return _driver.findElement(By.id('advacneId')).click();
+          }).then(function () {
+            search();
+          });
+        }
       });
     });
-  };
+  }
 
   function nextPage() {
     try {
-      _driver.wait(By.partialLinkText('下一页'), 10 * 1000, 'wait next page timeout.\nquit.');
-      _driver.findElement(By.partialLinkText('下一页')).click();
-      _driver.sleep(30 * 1000).then(function () {
+      _driver.wait(By.partialLinkText('下一页'), 10 * 1000, 'wait next page timeout.\nquit.').then(function () {
+        return _driver.findElement(By.partialLinkText('下一页')).click();
+      }).then(function () {
+        return _driver.sleep(30 * 1000);
+      }).then(function () {
           console.log('next page...');
           getResults();
       });
@@ -165,24 +192,33 @@ var CnkiCrawler = function (options) {
   }
 
   function download(data, index) {
+    var text = '';
+    var href = '';
     if (index === data.length) {
       nextPage();
     } else {
-      data[index].getAttribute('text').then(function (text) {
+      data[index].getAttribute('text').then(function (t) {
+        text = t;
+        return data[index].getAttribute('href');
+      }).then(function (h) {
+        href = h;
         if (_logger.isExist(text)) {
           console.log('skip <' + text + '> ...');
           download(data, index + 1);
           return;
         }
         console.log('start download <' + text + '> ...');
-        data[index].click();
+        return data[index].click();
+      }).then(function () {
         switchWindow(text);
-        _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), 60 * 1000, 'wait pdf download timeout.\nquit.'));
-        _driver.findElement(By.partialLinkText('PDF下载')).click();
+        return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), 60 * 1000, 'wait pdf download timeout.\nquit.'));
+      }).then(function () {
+        return _driver.findElement(By.partialLinkText('PDF下载')).click();
+      }).then(function () {
         // 检测是否成功下载
         setTimeout(function () {
           var exist = Util.existFile(text, _logger.path.day);
-          var log = {};
+          var log = {url: href};
           if (exist) { // success
             console.log('<' + exist + '> download success.');
             log.filename = exist;
@@ -191,7 +227,6 @@ var CnkiCrawler = function (options) {
             console.log('<' + text + '> download failed.');
           }
           _logger.put(text, log);
-          _driver.close();
           switchWindow(text);
           _driver.close();
           switchWindow('中国重要报纸全文数据库');
@@ -204,7 +239,7 @@ var CnkiCrawler = function (options) {
   }
 
   // driver switchs window according title contains specified text
-  function switchWindow(text) {
+  function switchWindow(text, callback) {
     var find = false;
     _driver.getAllWindowHandles().then(function (handles) {
       for (var hkey in handles) {
@@ -213,6 +248,7 @@ var CnkiCrawler = function (options) {
             _driver.getTitle().then(function (title) {
               if (title.indexOf(text) > -1) {
                 find = true;
+                typeof callback === 'function' && callback;
               }
             });
           }

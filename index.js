@@ -8,8 +8,8 @@ var config = {
 
 var options = {
   date: '2012-01-04',
-  enter: '37'
+  enter: '46'
 };
 
 var crawler = new CnkiCrawler(options);
-crawler.init();
+crawler.start();
