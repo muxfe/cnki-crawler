@@ -32,5 +32,8 @@ node_modules
 # Optional REPL history
 .node_repl_history
 
-# cookie
-cookie.pkl
+# custom
+cookies.pkl
+*.exe
+cookies-5730.pkl
+*.pdf
