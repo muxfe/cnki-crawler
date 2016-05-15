@@ -1,93 +1,104 @@
 var fs = require('fs');
-
-const LOGS = './logs';
+var Util = require('./util');
 
 var Logger = function (date) {
   var _path = {
     year: '',
     month: '',
-    day: ''
+    day: '',
+    log: ''
   };
 
+  // log
   var _log = {
     date: date,
     total: 0,
-    downloaded: 0,
-    items: []
+    n_failure: 0,
+    items: {},
+    n_success: 0
   };
 
-  if (!isExist(LOGS)) {
+  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads';
+
+  if (!Util.isExist(LOGS)) {
     fs.mkdirSync(LOGS);
   }
 
-  if (/^([0-9]{4})[-/\.]([0-1]?[0-9])[-/\.]([0-3]?[0-9])$/.test(date) === false) {
+  if (!Util.isDate(date)) {
     throw Error('date format error!');
   }
-  var datepart = date.split(/[-._]/);
-  _path.year = LOGS + '/' + datepart[0];
-  _path.month = _path.year + '/' + datepart[1];
-  _path.day = _path.month + '/' + datepart[2] + '.json';
 
-  if (!isExist(_path.year)) {
+  var datepart = date.split(/[-._/]/);
+  _path.year = LOGS + Util.PATH_SEP + datepart[0];
+  _path.month = _path.year + Util.PATH_SEP + Util.format2(datepart[1]);
+  _path.day = _path.month + Util.PATH_SEP + Util.format2(datepart[2]);
+  _path.log = _path.day + Util.PATH_SEP + Util.format2(datepart[2]) + '.json';
+
+  // create year folder
+  if (!Util.isExist(_path.year)) {
     fs.mkdirSync(_path.year);
   }
-  if (!isExist(_path.month)) {
+  // create month folder
+  if (!Util.isExist(_path.month)) {
     fs.mkdirSync(_path.month);
   }
-
-  var put = function (name, value) {
-    if (Array.isArray(_log[name])) {
-      _log[name].push(value);
-    } else if (typeof name === 'string') {
-      _log[name] = value;
-    }
-  };
-
-  var save = function () {
-    fs.writeFile(_path.day, JSON.stringify(_log), (err) => {
-      if (err) {
-        console.log('save ' + _log.date + ' log failed.');
-      } else {
-        console.log('save ' + _log.date + ' log successed.');
-      }
-    });
-  };
-
-  var load = function () {
-    if (isExist(_path.day)) {
-      return JSON.parse(fs.readFileSync(_path.day));
-    } else {
-      console.log(_path.day + ' not exist.');
-      return null;
-    }
-  };
-
-  var inc = function (name, val) {
-    _log[name] += val || 1;
-  };
-
-  var get = function (name) {
-    return _log[name];
-  };
+  // create day folder
+  if (!Util.isExist(_path.day)) {
+    fs.mkdirSync(_path.day);
+  }
+  // load log
+  load();
 
   return {
     save: save,
     load: load,
     get: get,
-    put: put
+    put: put,
+    inc: inc,
+    path: _path,
+    isExist: isExist
   };
-};
 
-function format(n) {
-  return n.length < 2 ? '0' + n : n;
-};
+  function put(name, value) {
+    _log['items'][name] = value;
+    if (value.filename) {
+      inc('n_success');
+    } else {
+      inc('n_failure');
+    }
+    inc('total');
+    save();
+  }
 
-function isExist(path) {
-  try {
-    var stats = fs.statSync(path);
-    return true;
-  } catch (e) {
-    return false;
+  function save() {
+    fs.writeFile(_path.log, JSON.stringify(_log), (err) => {
+      if (err) {
+        console.log('save ' + _log.date + ' log failed.');
+      }
+    });
+  }
+
+  function load() {
+    if (Util.isExist(_path.log)) {
+      _log = JSON.parse(fs.readFileSync(_path.log));
+    }
+  }
+
+  function inc(name, val) {
+    if (typeof _log[name] === 'number') {
+      _log[name] += val || 1;
+      return _log[name];
+    } else {
+      return null;
+    }
+  }
+
+  function get(name) {
+    return _log[name];
+  }
+
+  function isExist(name) {
+    return !!_log.items[name];
   }
 };
 
