@@ -53,6 +53,7 @@ var Logger = function (date) {
     save: save,
     load: load,
     get: get,
+    getItem: getItem,
     put: put,
     inc: inc,
     path: _path,
@@ -60,13 +61,21 @@ var Logger = function (date) {
   };
 
   function put(name, value) {
-    _log['items'][name] = value;
-    if (value.filename) {
-      inc('n_success');
-    } else {
-      inc('n_failure');
+    if (!name || !value) return;
+    if (!!_log['items'][name]) { // exist
+      if (!!value.filename) {
+        inc('n_failure', -1);
+        inc('n_success');
+      }
+    } else { // not exist
+      if (!!value.filename) {
+        inc('n_success');
+      } else {
+        inc('n_failure');
+      }
+      inc('total');
     }
-    inc('total');
+    _log['items'][name] = value;
     save();
   }
 
@@ -93,12 +102,16 @@ var Logger = function (date) {
     }
   }
 
+  function getItem(name) {
+    return _log['items'][name];
+  }
+
   function get(name) {
     return _log[name];
   }
 
   function isExist(name) {
-    return !!_log.items[name];
+    return !!_log.items[name] && !!_log.items[name].filename;
   }
 };
 

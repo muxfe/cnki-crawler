@@ -6,6 +6,7 @@ var webdriver = require('selenium-webdriver'),
   until = webdriver.until,
   error = webdriver.error,
   Key = webdriver.Key,
+  promise = webdriver.promise,
   chrome = require('selenium-webdriver/chrome'),
   proxy = require('selenium-webdriver/proxy');
 
@@ -23,25 +24,26 @@ const ENTER = {
   '37': '/showinfo-10-115-0.html',
   '46': 'http://www.5730.net/showinfo-10-145-0.html'
 };
+// configuration
+const CONFIG = './config.json';
 
 
-var CnkiCrawler = function (options) {
+var CnkiCrawler = function () {
   // configuration
   var _config = {
     enter: '37',
     username: 'sselaby',
     password: 'SSELab@2016',
     source: '上海证券报',
-    date: '2012-01-01',
-    sleeptime: 20, // seconds
-    page: 1
+    date: '2012-01-05',
+    dateend: '2012-12-31',
+    sleeptime: 20 // seconds
   };
 
-  // conbine configuration
-  if (options && typeof options === 'object') {
-    for (var key in options) {
-      _config[key] = options[key];
-    }
+  // read config
+  var config = Util.load(CONFIG);
+  if (config) {
+    _config = config;
   }
 
   // cookie file
@@ -49,6 +51,10 @@ var CnkiCrawler = function (options) {
 
   // logger
   var _logger = new Logger(_config['date']);
+
+  // retry times
+  var restartTimes = 0;
+  var WAIT = 30;
 
   // chrome option
   var chromeOption = new chrome.Options();
@@ -65,16 +71,20 @@ var CnkiCrawler = function (options) {
       .setChromeOptions(chromeOption)
       .build();
 
+  _driver.manage().timeouts().pageLoadTimeout(WAIT * 1000);
+  _driver.manage().timeouts().implicitlyWait(WAIT * 1000);
+
   return {
     start: start
   };
 
+  // goto result iframe
   function gotoResultFrame() {
-    _driver.wait(until.elementLocated(By.id('iframeResult')), 60 * 1000, 'load result timeout.\nquit.').then(function () {
+    _driver.wait(until.elementLocated(By.id('iframeResult')), WAIT * 1000, 'load result timeout.\nquit.').then(function () {
       return _driver.switchTo().frame('iframeResult');
     }).then(function () {
       console.log('result iframe loaded.');
-      return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), 30 * 1000, 'wait 50 per page timeout.\nquit.');
+      return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), WAIT * 1000, 'wait 50 per page timeout.\nquit.');
     }).then(function () {
       // sort
       return _driver.findElement(By.partialLinkText('报纸日期')).click();
@@ -88,116 +98,144 @@ var CnkiCrawler = function (options) {
     });
   };
 
+  // get paper dataset
   function getResults() {
-    try {
-      // find all paper elements
-      _driver.findElements(By.css('a.fz14')).then(function (data) {
-        if (!data || data.length === 0) { // no result
-          console.log(_config['date'] + ' has no result.');
-          return;
-        }
+    // find all paper elements
+    _driver.findElements(By.css('a.fz14')).then(function (data) {
+      if (!data || data.length === 0) { // no result
+        console.log(_config['date'] + ' has no result.');
+        return;
+      }
 
-        // handle result
-        download(data, 0);
-      });
-    } catch(e) {
+      // handle result
+      download(data, 0);
+    }, function (e) {
       console.log(e);
-    }
-  }
-
-  function search() {
-    try {
-      _driver.findElement(By.id('txt_1_sel')).findElement(By.css('option[value="LY"]')).click().then(function () {
-        console.log('set data source...');
-        return _driver.findElement(By.id('txt_1_value1')).sendKeys(_config['source']);
-      }).then(function () {
-        console.log('set search date_from...');
-        return _driver.findElement(By.id('publishdate_from')).sendKeys(_config['date']);
-      }).then(function () {
-        console.log('set search date_to...');
-        return _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
-      }).then(function () {
-        console.log('click search')
-        return _driver.findElement(By.id('btnSearch')).click();
-      }).then(function () {
-        gotoResultFrame();
-      });
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  function start() {
-    _driver.get(INDEX);
-    login(function () {
-      _driver.findElement(By.partialLinkText('知网数据库')).click().then(function () {
-        switchWindow('知网数据库_5730');
-        return _driver.executeScript('window.scrollTo(0, document.body.scrollHeight);');
-      }).then(function () {
-          return _driver.findElement(By.css('a[href="' + ENTER[_config['enter']] + '"]')).click();
-      }).then(function () {
-        // enter 46 different
-        if (_config['enter'] === '46') {
-          _driver.switchTo().alert().thenCatch(function (e) {
-            if (!e instanceof error.NoSuchAlertError) {
-              console.log(e);
-            }
-          }).then(function (alert) {
-            _driver.sleep(10 * 1000).then(function () {
-              switchWindow('选择平台入口');
-              return _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), 30 * 1000, 'wait KDN timeout.\nquit.');
-            }).then(function () {
-              return _driver.findElement(By.partialLinkText('知识发现网络')).click();
-            }).then(function () {
-              gotoEnter();
-            });
-          }, function (e) {
-            console.log(e);
-          });
-        } else {
-          gotoEnter();
-        }
-
-        function gotoEnter() {
-          console.log('goto enter ' + _config['enter']);
-          switchWindow('中国重要报纸全文数据库');
-          _driver.wait(until.elementLocated(By.id('CCND')), 30 * 1000, 'wait CCND timeout.\nquit.').then(function () {
-            return _driver.findElement(By.id('CCND')).findElement(By.css('a')).click();
-          }).then(function () {
-            return _driver.findElement(By.id('advacneId')).click();
-          }).then(function () {
-            search();
-          });
-        }
-      });
     });
   }
 
-  function nextPage() {
-    try {
-      _driver.wait(By.partialLinkText('下一页'), 10 * 1000, 'wait next page timeout.\nquit.').then(function () {
-        return _driver.findElement(By.partialLinkText('下一页')).click();
-      }).then(function () {
-        return _driver.sleep(30 * 1000);
-      }).then(function () {
-          console.log('next page...');
-          getResults();
-      });
-    } catch (e) {
-      if (e instanceof error.NoSuchElement) {
-        console.log('download all finished.');
-        _driver.quit();
-      }
-    }
+  // search
+  function search() {
+    _driver.findElement(By.id('txt_1_sel')).findElement(By.css('option[value="LY"]')).click().then(function () {
+      console.log('set data source...');
+      return _driver.findElement(By.id('txt_1_value1')).sendKeys(_config['source']);
+    }).then(function () {
+      console.log('set search date_from...');
+      return _driver.findElement(By.id('publishdate_from')).sendKeys(_config['date']);
+    }).then(function () {
+      console.log('set search date_to...');
+      return _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
+    }).then(function () {
+      console.log('click search')
+      return _driver.findElement(By.id('btnSearch')).click();
+    }).then(function () {
+      gotoResultFrame();
+    });
+  };
+
+  function restart() {
+    _driver.quit();
+
+    _logger = new Logger(_config['date']);
+    chromeOption = new chrome.Options();
+    chromeOption.setUserPreferences({
+      "download.default_directory": _logger.path.day
+    });
+
+    restartTimes++;
+    WAIT += 1 * restartTimes;
+
+    // chrome driver
+    _driver = new webdriver.Builder()
+        .forBrowser('chrome')
+        .setAlertBehavior('accept')
+        .setChromeOptions(chromeOption)
+        .build();
+
+    _config = Util.load(CONFIG);
+
+    _driver.manage().timeouts().pageLoadTimeout(WAIT * 1000);
+    _driver.manage().timeouts().implicitlyWait(WAIT * 1000);
+
+    var sleep = restartTimes * 10;
+    console.log('>>>>>restart after sleep ' + sleep + 's.<<<<<');
+    _driver.sleep(sleep * 1000).then(function () {
+      start();
+    });
   }
 
+  // start
+  function start() {
+    _driver.get(INDEX).then(function () {
+      login();
+    }).then(function () {
+      return _driver.findElement(By.partialLinkText('知网数据库')).click();
+    }).then(function () {
+      return switchRight();
+    }).then(function () {
+      return _driver.executeScript('window.scrollTo(0, document.body.scrollHeight);');
+    }).then(function () {
+        return _driver.findElement(By.css('a[href="' + ENTER[_config['enter']] + '"]')).click();
+    }).then(function () {
+      return switchRight();
+    }).then(function () {
+      return acceptAlert();
+    }).then(function () {
+      return _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), WAIT * 1000, 'wait KDN timeout.\nquit.');
+    }).then(function () {
+      return _driver.findElement(By.partialLinkText('知识发现网络')).click();
+    }, function (e) { // wait error
+      promise.rejected(e);
+    }).then(function () {
+      console.log('goto enter ' + _config['enter']);
+      return switchRight();
+    }).then(function () {
+      return _driver.wait(until.elementLocated(By.id('CCND')), WAIT * 1000, 'wait CCND timeout.\nquit.');
+    }).then(function () {
+      return _driver.findElement(By.id('CCND')).findElement(By.css('a')).click();
+    }, function (e) {// wait error
+      promise.rejected(e);
+    }).then(function () {
+      return _driver.findElement(By.id('advacneId')).click();
+    }).then(function () {
+      search();
+    }).catch(function (e) {
+      console.log(e.message);
+      restart();
+    });
+  }
+
+  // next page
+  function nextPage() {
+    _driver.wait(By.partialLinkText('下一页'), WAIT * 1000, 'wait next page timeout.\nquit.').then(function () {
+      return _driver.findElement(By.partialLinkText('下一页')).click();
+    }).then(function () {
+      return _driver.sleep(WAIT * 1000);
+    }, function (e) {
+      promise.rejected(e);
+    }).then(function () {
+      console.log('>>>>>>next page...<<<<<<');
+      getResults();
+    }).catch(function (e) {
+      console.log(e.message);
+      _config['date'] = Util.incDate(_config['date']);
+      Util.save();
+      restart();
+    });
+  }
+
+  // donwload one paper
   function download(data, index) {
     var text = '';
     var href = '';
     if (index === data.length) {
       nextPage();
     } else {
-      data[index].getAttribute('text').then(function (t) {
+      switchRight().then(function () {
+        return _driver.switchTo().frame('iframeResult');
+      }).then(function () {
+        return data[index].getAttribute('text');
+      }).then(function (t) {
         text = t;
         return data[index].getAttribute('href');
       }).then(function (h) {
@@ -207,58 +245,84 @@ var CnkiCrawler = function (options) {
           download(data, index + 1);
           return;
         }
+        console.log('--------------------------------------');
         console.log('start download <' + text + '> ...');
         return data[index].click();
       }).then(function () {
-        switchWindow(text);
-        return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), 60 * 1000, 'wait pdf download timeout.\nquit.'));
+        return switchRight();
       }).then(function () {
+        return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), WAIT * 1000, 'wait pdf download timeout.\nquit.'));
+      }).then(function () {
+        console.log('downloading...');
         return _driver.findElement(By.partialLinkText('PDF下载')).click();
+      }, function (e) {// wait error
+        console.log('download time too lang...restart later...');
+        promise.rejected(e);
+      }).then(function () {
+        console.log('if alert open...');
+        return switchRight();
+      }).then(function () {
+        console.log('try to close alert...');
+        return acceptAlert(); // handle alert('用户并发数已满')
+      }).then(function () {
+        console.log('waiting for download...');
+        return _driver.sleep(WAIT * 1000);
       }).then(function () {
         // 检测是否成功下载
-        setTimeout(function () {
-          var exist = Util.existFile(text, _logger.path.day);
-          var log = {url: href};
-          if (exist) { // success
-            console.log('<' + exist + '> download success.');
-            log.filename = exist;
-            _logger.inc('n_success');
-          } else { // failed
-            console.log('<' + text + '> download failed.');
-          }
-          _logger.put(text, log);
-          switchWindow(text);
-          _driver.close();
-          switchWindow('中国重要报纸全文数据库');
-          setTimeout(function () {
-            download(data, index + 1);
-          }, _config['sleeptime']);
-        }, 30 * 1000);
+        console.log('detecting if not download success...');
+        var exist = Util.existFile(text, _logger.path.day);
+        var log = {url: href};
+        if (exist) { // success
+          console.log('<' + exist + '> download success.');
+          log.filename = exist;
+        } else { // failed
+          console.log('<' + text + '> download failed.');
+        }
+        _logger.put(text, log);
+      }).then(function () {
+        return _driver.sleep(1 * 1000);
+      }).then(function () {
+        return _driver.getAllWindowHandles();
+      }).then(function (handles) {
+        if (handles.length > 4) { // handle 500.etc. error or checkcode
+          return _driver.close(); // close error page
+        }
+      }).then(function () {
+        return switchRight();
+      }).then(function () {
+        return _driver.close(); // close pdf download page
+      }).then(function () {
+        return _driver.sleep(_config['sleeptime']);
+      }).then(function () {
+        download(data, index + 1);
+      }).catch(function (e) {
+        console.log(e.message);
+        restart();
       });
     }
   }
 
-  // driver switchs window according title contains specified text
-  function switchWindow(text, callback) {
-    var find = false;
-    _driver.getAllWindowHandles().then(function (handles) {
-      for (var hkey in handles) {
-        _driver.switchTo().window(handles[hkey]).then(function () {
-          if (!find) {
-            _driver.getTitle().then(function (title) {
-              if (title.indexOf(text) > -1) {
-                find = true;
-                typeof callback === 'function' && callback;
-              }
-            });
-          }
-        });
+  // switch to right window
+  function switchRight() {
+    return _driver.getAllWindowHandles().then(function (handles) {
+      return _driver.switchTo().window(handles[handles.length - 1]);
+    });
+  }
+
+  // ignore alert
+  function acceptAlert() {
+    return _driver.wait(until.alertIsPresent(), 1 * 1000, 'wait alert timeout.\nquit.').then(function () {
+      console.log('ignore open alert.');
+      return _driver.switchTo().alert().accept();
+    }).thenCatch(function (e) {
+      if (!e instanceof error.NoSuchAlertError) {
+        console.log(e);
       }
     });
   }
 
   // emulate login
-  function loadCookies(callback) {
+  function loadCookies() {
     var cookies = JSON.parse(fs.readFileSync(COOKIE));
     // console.log(cookies);
     var cookies_len = cookies.length;
@@ -268,7 +332,6 @@ var CnkiCrawler = function (options) {
         if (cookies_len === 0) {
           _driver.navigate().refresh().then(function () {
             console.log('load ' + COOKIE + ' success');
-            typeof callback === 'function' && callback();
           });
         }
       });
@@ -276,7 +339,7 @@ var CnkiCrawler = function (options) {
   }
 
   // save cookies to local disk
-  function saveCookies(callback) {
+  function saveCookies() {
     // save cookies
     _driver.manage().getCookies().then(function (cookies) {
       // console.log(cookies);
@@ -285,24 +348,23 @@ var CnkiCrawler = function (options) {
           console.log('save ' + COOKIE + ' failed.');
         } else {
           console.log('save ' + COOKIE + ' successed.');
-          typeof callback === 'function' && callback();
         }
       });
     });
   }
 
   // login www.5730.net
-  function login(callback) {
+  function login() {
     if (Util.isExist(COOKIE)) {
       console.log('try to login with cookie...');
-      loadCookies(callback);
+      loadCookies();
     } else {
       console.log('cookie not exist.\nplease login by hands in 30 seconds...');
       // dirver will quit if not login in 30 seconds
       _driver.wait(until.elementLocated(By.css('div.login > font')), 30 * 1000, 'you are not logged...\nquit.');
       // login success
       console.log('login success.');
-      saveCookies(callback);
+      saveCookies();
     }
   }
 };
