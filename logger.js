@@ -1,7 +1,7 @@
 var fs = require('fs');
 var Util = require('./util');
 
-var Logger = function (date) {
+var Logger = function (date, source) {
   var _path = {
     year: '',
     month: '',
@@ -18,7 +18,9 @@ var Logger = function (date) {
     n_success: 0
   };
 
-  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads';
+  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads' + Util.PATH_SEP + source;
+
+  console.log(LOGS);
 
   if (!Util.isExist(LOGS)) {
     fs.mkdirSync(LOGS);

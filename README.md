@@ -24,18 +24,21 @@ change `config.json`
 
 ```
 {
-  "enter": "37",
-  "username": "yourname",
+  "enter": "46",
   // cookie文件会按username来存储，可以用不同帐号运行程序，切换时改配置文件里的username即可，不用重新登录
   // 如果在程序中登录成功并存储了cookie文件，在别的浏览器重新登录的话，这里的cookie会失效。
-  "source": "上海证券报",
-  "date": "2012-01-01",
-  "dateend": "2012-12-31",
-  "sleeptime": 20
+  "username": "labsse1",
+  "source": "中国证券报",
+  "date": "2010-01-04",
+  "dateend": "2010-05-31",
+  "sleeptime": 20,
+  "auto_toggle_enter": true // 如果不想程序自动切换入口，改成 false
 }
 ```
 
-run `node index.js`
+run
+
+`node index.js`
 
 ## Note
 
@@ -46,7 +49,8 @@ run `node index.js`
 1. 程序每下载完一天后会重启，并切换一次入口，暂时只支持切换 37 和 46 入口
 1. 全程无需手工干预，起至日期填写一年即可，程序如遇致命错误关闭，重新运行即可(`node index.js`)
 1. 程序的重启次数和运行过程中的休眠时间成正比，即重启次数越多，休眠时间越长
-1. 如果某天下载失败数超过 3，会重新下载该天失败的链接
+1. 如果某天下载失败数超过 **3**，会重新下载该天失败的链接
+1. 失败多次程序会尝试切换入口（37 容易被封 IP）
 
 ## Error Handling
 
@@ -57,10 +61,10 @@ run `node index.js`
 
 * 出现 `angle_platform_impl.cc` 错误
 
-  更 DirectX 有关，尝试更新或修复
+  暂时没有修复办法，有的话请提 [PR](https://github.com/x-web/cnki-crawler/issues/new)
 * 出现 `WebElment not clickable` 错误而频繁重启
 
-  分辨率问题，导致要点击的元素被其他元素遮挡，有时间我会修复
+  分辨率问题，导致要点击的元素被其他元素遮挡（已修复）
 * `npm install` 安装时间过长，或安装失败
 
   重新运行命令

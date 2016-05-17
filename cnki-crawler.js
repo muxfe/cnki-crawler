@@ -51,7 +51,7 @@ var CnkiCrawler = function () {
   var COOKIE = 'cookies-' + _config['username'] + '.pkl';
 
   // logger
-  var _logger = new Logger(_config['date']);
+  var _logger = new Logger(_config['date'], _config['source']);
 
   // retry times
   var restartTimes = 0;
@@ -147,7 +147,7 @@ var CnkiCrawler = function () {
 
   function restart() {
     _driver.quit().then(function () {
-      _logger = new Logger(_config['date']);
+      _logger = new Logger(_config['date'], _config['source']);
       chromeOption = new chrome.Options();
       chromeOption.setUserPreferences({
         "download.default_directory": _logger.path.day
@@ -252,13 +252,21 @@ var CnkiCrawler = function () {
     });
   }
 
-  // next day
-  function nextDay() {
-    _config['date'] = Util.incDate(_config['date']);
-    if (_config['enter'] === '46') { // 每下一天切换一次入口
+  // change enter
+  function toggleEnter() {
+    if (_config['enter'] === '46') {
       _config['enter'] = '37';
     } else {
       _config['enter'] = '46';
+    }
+    Util.save(CONFIG, _config);
+  }
+
+  // next day
+  function nextDay() {
+    _config['date'] = Util.incDate(_config['date']);
+    if (_config['auto_toggle_enter']) {
+      toggleEnter(); // 每下一天切换一次入口
     }
     restartTimes = 0;
     WAIT = 30;
@@ -267,10 +275,8 @@ var CnkiCrawler = function () {
       console.log('----------------ALL DOWN------------------');
       console.log('------------------------------------------');
       _driver.quit();
-      return;
     } else {
       console.log(_config);
-      Util.save(CONFIG, _config);
       restart();
     }
   }
@@ -346,6 +352,9 @@ var CnkiCrawler = function () {
           failedTimes++;
           console.log('>>>failed times: ' + failedTimes);
           if (failedTimes > 10) {
+            if (_config['auto_toggle_enter']) {
+              toggleEnter();
+            }
             console.log('failed too many times, restart later...');
             restart();
           }
@@ -371,6 +380,9 @@ var CnkiCrawler = function () {
           checkcodeTimes++;
           console.log('>>>checkcode times: ' + checkcodeTimes);
           if (checkcodeTimes > 10) {
+            if (_config['auto_toggle_enter']) {
+              toggleEnter();
+            }
             restart();
           }
           _driver.close();
@@ -450,11 +462,16 @@ var CnkiCrawler = function () {
       return _driver.sleep(3 * 1000);
     } else {
       console.log('cookie not exist.\nplease login by hands in 30 seconds...');
-      // dirver will quit if not login in 30 seconds
-      _driver.wait(until.elementLocated(By.css('div.login > font')), 30 * 1000, 'you are not logged...\nquit.').then(function () {
+      _driver.findElement(By.css('input[name="username"]')).sendKeys(_config['username']).then(function () {
+        // dirver will quit if not login in 30 seconds
+        return _driver.wait(until.elementLocated(By.css('div.login > font')), 30 * 1000, 'you are not logged...\nquit.')
+      }).then(function () {
         // login success
         console.log('login success.');
         return saveCookies();
+      }, function (e) {
+        console.log(e.message);
+        restart();
       });
     }
   }
