@@ -34,7 +34,7 @@ Util.prototype.existFile = function (text, path) {
   var ls = fs.readdirSync(path);
   for (var i = 0; i < ls.length; i++) {
     var filename = ls[i].replace(/[\s][\(][0-9]+[\)]/g, '');
-    if (process.platform === 'linux') {
+    if (process.platform === 'linux') { // linux默认 utf-8 编码，中文文件名会乱码
       var buf = new Buffer(filename, 'utf8');
       buf = iconv.encode(buf, 'iso-8859-1');
       buf = iconv.decode(buf, 'gbk');
@@ -80,7 +80,7 @@ Util.prototype.incDate = function (date) {
 function formatFilename(text) {
   if (typeof text === 'string') {
     text = text.replace(/[\s]/g, '');
-    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·？?]/g, '_');
+    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·？?——\\&/]/g, '_');
     text = text.replace(/[_]{2,}/, '_');
     return text;
   }
