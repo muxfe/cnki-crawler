@@ -265,6 +265,7 @@ var CnkiCrawler = function () {
   // next day
   function nextDay() {
     _config['date'] = Util.incDate(_config['date']);
+    Util.save(CONFIG);
     if (_config['auto_toggle_enter']) {
       toggleEnter(); // 每下一天切换一次入口
     }
@@ -385,8 +386,11 @@ var CnkiCrawler = function () {
             }
             restart();
           }
-          _driver.close();
-          download(data, index);
+          return _driver.sleep(10 * 1000).then(function () {
+            return _driver.close();
+          }).then(function () {
+            download(data, index);
+          });
         } else {
           console.log(e);
           restart();
