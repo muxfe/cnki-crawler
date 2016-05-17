@@ -20,7 +20,7 @@ var Logger = function (date, source) {
 
   const LOGS = process.cwd() + Util.PATH_SEP + 'downloads' + Util.PATH_SEP + source;
 
-  console.log(LOGS);
+  // console.log(LOGS);
 
   if (!Util.isExist(LOGS)) {
     fs.mkdirSync(LOGS);

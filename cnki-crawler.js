@@ -265,7 +265,7 @@ var CnkiCrawler = function () {
   // next day
   function nextDay() {
     _config['date'] = Util.incDate(_config['date']);
-    Util.save(CONFIG);
+    Util.save(CONFIG, _config);
     if (_config['auto_toggle_enter']) {
       toggleEnter(); // 每下一天切换一次入口
     }
