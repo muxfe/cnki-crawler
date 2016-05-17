@@ -5,25 +5,18 @@ var Util = function () {
 
 };
 
-Util.prototype.isExist = function (path) {
-  try {
-    var stats = fs.statSync(path);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
+Util.prototype.isExist = isExist;
 
 Util.prototype.isDate = function (date) {
   return /^([0-9]{4})[-/\.]([0-1]?[0-9])[-/\.]([0-3]?[0-9])$/.test(date);
 };
 
-Util.prototype.format2 = function (n) {
-  return n.length < 2 ? ('0' + n) : n;
-};
+Util.prototype.format2 = format2;
+
+var PATH_SEP = process.platform === 'win32' ? '\\' : '/';
 
 // path seperator
-Util.prototype.PATH_SEP = process.platform === 'win32' ? '\\' : '/';
+Util.prototype.PATH_SEP = PATH_SEP;
 
 Util.prototype.date2path = function (date) {
   var path = '';
@@ -51,7 +44,10 @@ Util.prototype.existFile = function (text, path) {
       // console.log('before: ' + ls[i]);
       // console.log('after: ' + filename);
     }
-    if (filename.indexOf(text) > -1) {
+    if (filename.length < 38 && filename.indexOf(text) > -1) {
+      return filename;
+    } else if (filename.length >= 38 && filename.substring(0, 16).indexOf(text.substring(0, 16)) > -1) {
+      // long filename will not match text, so cut pre 16 string to match
       return filename;
     }
   }
@@ -59,7 +55,7 @@ Util.prototype.existFile = function (text, path) {
 };
 
 Util.prototype.save = function (filename, json) {
-  fs.writeFile(filename, JSON.stringify(json), (err) => {
+  fs.writeFile(filename, JSON.stringify(json, null, 2), (err) => {
     if (err) {
       console.log('save ' + filename + ' failed.');
     }
@@ -67,7 +63,7 @@ Util.prototype.save = function (filename, json) {
 };
 
 Util.prototype.load = function (filename) {
-  if (Util.isExist(filename)) {
+  if (isExist(filename)) {
     return JSON.parse(fs.readFileSync(filename));
   } else {
     return null;
@@ -77,16 +73,30 @@ Util.prototype.load = function (filename) {
 Util.prototype.incDate = function (date) {
   var pre = new Date(date);
   var next = new Date(pre.valueOf() + 24 * 3600 * 1000);
-  return next.getFullYear() + '-' + Util.format2(next.getMonth() + 1) + '-' + Util.format2(next.getDay());
+  console.log(next);
+  return (next.getFullYear() + '-' + format2(next.getMonth() + 1) + '-' + (format2(next.getDay() + 1))); // month and day start with 0
 };
 
 function formatFilename(text) {
   if (typeof text === 'string') {
     text = text.replace(/[\s]/g, '');
-    text = text.replace(/["'“”《》:：，。,;；@!~`%$￥（）*+=|、.]/g, '_');
+    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·]/g, '_');
     return text;
   }
-};
+}
+
+function isExist(path) {
+  try {
+    var stats = fs.statSync(path);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function format2(n) {
+  return n.toString().length < 2 ? ('0' + n) : n;
+}
 
 var util = new Util();
 

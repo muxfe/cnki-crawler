@@ -31,11 +31,11 @@ const CONFIG = './config.json';
 var CnkiCrawler = function () {
   // configuration
   var _config = {
-    enter: '37',
+    enter: '46',
     username: 'sselaby',
     password: 'SSELab@2016',
     source: '上海证券报',
-    date: '2012-01-05',
+    date: '2012-01-04',
     dateend: '2012-12-31',
     sleeptime: 20 // seconds
   };
@@ -44,6 +44,8 @@ var CnkiCrawler = function () {
   var config = Util.load(CONFIG);
   if (config) {
     _config = config;
+  } else {
+    Util.save(CONFIG, _config);
   }
 
   // cookie file
@@ -55,6 +57,7 @@ var CnkiCrawler = function () {
   // retry times
   var restartTimes = 0;
   var WAIT = 30;
+  var page = 1;
 
   // chrome option
   var chromeOption = new chrome.Options();
@@ -103,10 +106,11 @@ var CnkiCrawler = function () {
     // find all paper elements
     _driver.findElements(By.css('a.fz14')).then(function (data) {
       if (!data || data.length === 0) { // no result
-        console.log(_config['date'] + ' has no result.');
+        console.log('==========Empty ' + _config['date'] + ' ==========');
+        nextDay();
         return;
       }
-
+      console.log('==========Page: ' + page + '==========Total: ' + data.length + '==========');
       // handle result
       download(data, 0);
     }, function (e) {
@@ -134,38 +138,45 @@ var CnkiCrawler = function () {
   };
 
   function restart() {
-    _driver.quit();
+    _driver.quit().then(function () {
+      _logger = new Logger(_config['date']);
+      chromeOption = new chrome.Options();
+      chromeOption.setUserPreferences({
+        "download.default_directory": _logger.path.day
+      });
 
-    _logger = new Logger(_config['date']);
-    chromeOption = new chrome.Options();
-    chromeOption.setUserPreferences({
-      "download.default_directory": _logger.path.day
-    });
+      restartTimes++;
+      WAIT += 1 * restartTimes;
+      page = 1;
 
-    restartTimes++;
-    WAIT += 1 * restartTimes;
+      // chrome driver
+      _driver = new webdriver.Builder()
+          .forBrowser('chrome')
+          .setAlertBehavior('accept')
+          .setChromeOptions(chromeOption)
+          .build();
 
-    // chrome driver
-    _driver = new webdriver.Builder()
-        .forBrowser('chrome')
-        .setAlertBehavior('accept')
-        .setChromeOptions(chromeOption)
-        .build();
-
-    _config = Util.load(CONFIG);
-
-    _driver.manage().timeouts().pageLoadTimeout(WAIT * 1000);
-    _driver.manage().timeouts().implicitlyWait(WAIT * 1000);
-
-    var sleep = restartTimes * 10;
-    console.log('>>>>>restart after sleep ' + sleep + 's.<<<<<');
-    _driver.sleep(sleep * 1000).then(function () {
+      _config = Util.load(CONFIG);
+      return _driver.manage().timeouts().pageLoadTimeout(WAIT * 1000);
+    }).then(function () {
+      return _driver.manage().timeouts().implicitlyWait(WAIT * 1000);
+    }).then(function () {
+      var sleep = restartTimes * 10;
+      console.log('>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<');
+      console.log('>>>>>>>>>>restart after sleep ' + sleep + 's.<<<<<<<<<<');
+      console.log('>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<');
+      return _driver.sleep(sleep * 1000);
+    }).then(function () {
       start();
     });
   }
 
   // start
   function start() {
+    if (isEnd()) {
+      console.log(_config['date'] + ' ~ ' + _config['dateend'] + ' is already downloaded.');
+    }
+    console.log('==========Start downloading ' + _config['date'] + '==========');
     _driver.get(INDEX).then(function () {
       login();
     }).then(function () {
@@ -181,11 +192,13 @@ var CnkiCrawler = function () {
     }).then(function () {
       return acceptAlert();
     }).then(function () {
-      return _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), WAIT * 1000, 'wait KDN timeout.\nquit.');
-    }).then(function () {
-      return _driver.findElement(By.partialLinkText('知识发现网络')).click();
-    }, function (e) { // wait error
-      promise.rejected(e);
+      if (_config['enter'] === '46') {
+        return _driver.wait(until.elementLocated(By.partialLinkText('知识发现网络')), WAIT * 1000, 'wait KDN timeout.\nquit.').then(function () {
+          return _driver.findElement(By.partialLinkText('知识发现网络')).click();
+        }, function (e) { // wait error
+          promise.rejected(e);
+        });
+      }
     }).then(function () {
       console.log('goto enter ' + _config['enter']);
       return switchRight();
@@ -200,28 +213,55 @@ var CnkiCrawler = function () {
     }).then(function () {
       search();
     }).catch(function (e) {
-      console.log(e.message);
+      console.log(e);
       restart();
     });
   }
 
   // next page
   function nextPage() {
-    _driver.wait(By.partialLinkText('下一页'), WAIT * 1000, 'wait next page timeout.\nquit.').then(function () {
+    console.log('====================next page====================');
+    switchRight().then(function () {
+      return _driver.switchTo().frame('iframeResult');
+    }).then(function () {
       return _driver.findElement(By.partialLinkText('下一页')).click();
     }).then(function () {
       return _driver.sleep(WAIT * 1000);
     }, function (e) {
+      console.log('next page error.');
       promise.rejected(e);
     }).then(function () {
-      console.log('>>>>>>next page...<<<<<<');
+      page++;
       getResults();
     }).catch(function (e) {
-      console.log(e.message);
-      _config['date'] = Util.incDate(_config['date']);
-      Util.save();
-      restart();
+      console.log('====================next day====================')
+      nextDay();
     });
+  }
+
+  // next day
+  function nextDay() {
+    _config['date'] = Util.incDate(_config['date']);
+    if (_config['enter'] === '46') { // 每下一天切换一次入口
+      _config['enter'] = '37';
+    } else {
+      _config['enter'] = '46';
+    }
+    if (isEnd()) {
+      console.log('------------------------------------------');
+      console.log('----------------ALL DOWN------------------');
+      console.log('------------------------------------------');
+      _driver.quit();
+      return;
+    } else {
+      console.log(_config);
+      Util.save(CONFIG, _config);
+      restart();
+    }
+  }
+
+  function isEnd() {
+    return new Date(_config['date']).valueOf() > new Date(_config['dateend']);
   }
 
   // donwload one paper
@@ -241,13 +281,15 @@ var CnkiCrawler = function () {
       }).then(function (h) {
         href = h;
         if (_logger.isExist(text)) {
-          console.log('skip <' + text + '> ...');
+          console.log('skip [' + (index + 1) + ']<' + text + '> ...');
           download(data, index + 1);
           return;
         }
-        console.log('--------------------------------------');
-        console.log('start download <' + text + '> ...');
+        console.log('------------------------------------------------------------------------');
+        console.log('start download [' + (index + 1) + ']<' + text + '> ...');
         return data[index].click();
+      }).then(function () {
+        return _driver.sleep(1 * 1000);
       }).then(function () {
         return switchRight();
       }).then(function () {
@@ -256,22 +298,23 @@ var CnkiCrawler = function () {
         console.log('downloading...');
         return _driver.findElement(By.partialLinkText('PDF下载')).click();
       }, function (e) {// wait error
-        console.log('download time too lang...restart later...');
+        console.log('+++++download time too lang...restart later...+++++');
         promise.rejected(e);
       }).then(function () {
-        console.log('if alert open...');
         return switchRight();
+      }, function (e) {
+        promise.rejected(e);
       }).then(function () {
-        console.log('try to close alert...');
         return acceptAlert(); // handle alert('用户并发数已满')
       }).then(function () {
-        console.log('waiting for download...');
-        return _driver.sleep(WAIT * 1000);
+        return _driver.sleep(5 * 1000);
+      }, function (e) {
+        promise.rejected(e);
       }).then(function () {
-        // 检测是否成功下载
-        console.log('detecting if not download success...');
+        // detect if not download success
         var exist = Util.existFile(text, _logger.path.day);
-        var log = {url: href};
+        var indexOfPaper = (index + 1) + (page - 1) * 50;
+        var log = {url: href, index: indexOfPaper};
         if (exist) { // success
           console.log('<' + exist + '> download success.');
           log.filename = exist;
@@ -296,7 +339,7 @@ var CnkiCrawler = function () {
       }).then(function () {
         download(data, index + 1);
       }).catch(function (e) {
-        console.log(e.message);
+        console.log(e);
         restart();
       });
     }
@@ -317,6 +360,8 @@ var CnkiCrawler = function () {
     }).thenCatch(function (e) {
       if (!e instanceof error.NoSuchAlertError) {
         console.log(e);
+      } else {
+        console.log('no alert open');
       }
     });
   }
@@ -343,7 +388,7 @@ var CnkiCrawler = function () {
     // save cookies
     _driver.manage().getCookies().then(function (cookies) {
       // console.log(cookies);
-      fs.writeFile(COOKIE, JSON.stringify(cookies), (err) => {
+      fs.writeFile(COOKIE, JSON.stringify(cookies, null, 2), (err) => {
         if (err) {
           console.log('save ' + COOKIE + ' failed.');
         } else {

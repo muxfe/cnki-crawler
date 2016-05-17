@@ -80,7 +80,7 @@ var Logger = function (date) {
   }
 
   function save() {
-    fs.writeFile(_path.log, JSON.stringify(_log), (err) => {
+    fs.writeFile(_path.log, JSON.stringify(_log, null, 2), (err) => {
       if (err) {
         console.log('save ' + _log.date + ' log failed.');
       }
