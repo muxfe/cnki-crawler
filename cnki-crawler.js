@@ -33,7 +33,6 @@ var CnkiCrawler = function () {
   var _config = {
     enter: '46',
     username: 'sselaby',
-    password: 'SSELab@2016',
     source: '上海证券报',
     date: '2012-01-04',
     dateend: '2012-12-31',
@@ -58,6 +57,7 @@ var CnkiCrawler = function () {
   var restartTimes = 0;
   var WAIT = 30;
   var page = 1;
+  var failedTimes = 0;
 
   // chrome option
   var chromeOption = new chrome.Options();
@@ -95,7 +95,7 @@ var CnkiCrawler = function () {
       return _driver.findElement(By.partialLinkText('报纸日期')).click();
     }).then(function () {
       // click 50 per page
-      return _driver.findElement(By.css('#id_grid_display_num a:last-child')).click();
+      return _driver.findElement(By.css('#id_grid_display_num')).findElement(By.partialLinkText('50')).click();
     }).then(function () {
       getResults();
     });
@@ -130,6 +130,8 @@ var CnkiCrawler = function () {
       console.log('set search date_to...');
       return _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
     }).then(function () {
+      return _driver.sleep(1 * 1000);
+    }).then(function () {
       console.log('click search')
       return _driver.findElement(By.id('btnSearch')).click();
     }).then(function () {
@@ -148,6 +150,7 @@ var CnkiCrawler = function () {
       restartTimes++;
       WAIT += 1 * restartTimes;
       page = 1;
+      failedTimes = 0;
 
       // chrome driver
       _driver = new webdriver.Builder()
@@ -188,8 +191,6 @@ var CnkiCrawler = function () {
     }).then(function () {
         return _driver.findElement(By.css('a[href="' + ENTER[_config['enter']] + '"]')).click();
     }).then(function () {
-      return switchRight();
-    }).then(function () {
       return acceptAlert();
     }).then(function () {
       if (_config['enter'] === '46') {
@@ -226,7 +227,7 @@ var CnkiCrawler = function () {
     }).then(function () {
       return _driver.findElement(By.partialLinkText('下一页')).click();
     }).then(function () {
-      return _driver.sleep(WAIT * 1000);
+      return _driver.sleep(_config['sleeptime'] * 1000);
     }, function (e) {
       console.log('next page error.');
       promise.rejected(e);
@@ -247,6 +248,7 @@ var CnkiCrawler = function () {
     } else {
       _config['enter'] = '46';
     }
+    restartTimes = 0;
     if (isEnd()) {
       console.log('------------------------------------------');
       console.log('----------------ALL DOWN------------------');
@@ -271,6 +273,7 @@ var CnkiCrawler = function () {
     if (index === data.length) {
       nextPage();
     } else {
+      var indexOfPaper = (index + 1) + (page - 1) * 50;
       switchRight().then(function () {
         return _driver.switchTo().frame('iframeResult');
       }).then(function () {
@@ -281,12 +284,12 @@ var CnkiCrawler = function () {
       }).then(function (h) {
         href = h;
         if (_logger.isExist(text)) {
-          console.log('skip [' + (index + 1) + ']<' + text + '> ...');
+          console.log('skip [' + indexOfPaper + ']<' + text + '> ...');
           download(data, index + 1);
           return;
         }
         console.log('------------------------------------------------------------------------');
-        console.log('start download [' + (index + 1) + ']<' + text + '> ...');
+        console.log('start download [' + indexOfPaper + ']<' + text + '> ...');
         return data[index].click();
       }).then(function () {
         return _driver.sleep(1 * 1000);
@@ -301,24 +304,32 @@ var CnkiCrawler = function () {
         console.log('+++++download time too lang...restart later...+++++');
         promise.rejected(e);
       }).then(function () {
-        return switchRight();
+        return _driver.sleep(_config['sleeptime'] * 1000);
       }, function (e) {
         promise.rejected(e);
       }).then(function () {
-        return acceptAlert(); // handle alert('用户并发数已满')
+        return _driver.getAllWindowHandles();
+      }).then(function (handles) {
+        if (handles.length > 4) {
+          console.log('try to close alert...');
+          return acceptAlert(); // handle alert('用户并发数已满')
+        }
       }).then(function () {
-        return _driver.sleep(5 * 1000);
-      }, function (e) {
-        promise.rejected(e);
+        return _driver.sleep(1 * 1000);
       }).then(function () {
         // detect if not download success
         var exist = Util.existFile(text, _logger.path.day);
-        var indexOfPaper = (index + 1) + (page - 1) * 50;
         var log = {url: href, index: indexOfPaper};
         if (exist) { // success
           console.log('<' + exist + '> download success.');
           log.filename = exist;
         } else { // failed
+          failedTimes++;
+          console.log('failed times: ' + failedTimes);
+          if (failedTimes > 10) {
+            console.log('failed too many times, restart later...');
+            restart();
+          }
           console.log('<' + text + '> download failed.');
         }
         _logger.put(text, log);
@@ -334,8 +345,6 @@ var CnkiCrawler = function () {
         return switchRight();
       }).then(function () {
         return _driver.close(); // close pdf download page
-      }).then(function () {
-        return _driver.sleep(_config['sleeptime']);
       }).then(function () {
         download(data, index + 1);
       }).catch(function (e) {
@@ -354,15 +363,21 @@ var CnkiCrawler = function () {
 
   // ignore alert
   function acceptAlert() {
-    return _driver.wait(until.alertIsPresent(), 1 * 1000, 'wait alert timeout.\nquit.').then(function () {
+    return switchRight().then(function() {
+      return _driver.wait(until.alertIsPresent(), 1 * 1000, 'wait alert timeout.');
+    }).then(function () {
       console.log('ignore open alert.');
-      return _driver.switchTo().alert().accept();
+      return _driver.switchTo().alert().dismiss();
+    }, function (e) {
+      promise.rejected(e);
     }).thenCatch(function (e) {
-      if (!e instanceof error.NoSuchAlertError) {
+      if (!(e instanceof error.NoSuchAlertError)) {
         console.log(e);
       } else {
         console.log('no alert open');
       }
+    }).catch(function (e) {
+      console.log('wait timeout');
     });
   }
 

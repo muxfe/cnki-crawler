@@ -33,7 +33,7 @@ Util.prototype.existFile = function (text, path) {
   text = formatFilename(text);
   var ls = fs.readdirSync(path);
   for (var i = 0; i < ls.length; i++) {
-    var filename = ls[i];
+    var filename = ls[i].replace(/[\s][\(][0-9]+[\)]/g, '');
     if (process.platform === 'linux') {
       var buf = new Buffer(filename, 'utf8');
       buf = iconv.encode(buf, 'iso-8859-1');
@@ -46,7 +46,7 @@ Util.prototype.existFile = function (text, path) {
     }
     if (filename.length < 38 && filename.indexOf(text) > -1) {
       return filename;
-    } else if (filename.length >= 38 && filename.substring(0, 16).indexOf(text.substring(0, 16)) > -1) {
+    } else if (filename.length >= 38 && filename.substring(0, 16).replace('_', '').indexOf(text.substring(0, 10)) > -1) {
       // long filename will not match text, so cut pre 16 string to match
       return filename;
     }
@@ -74,13 +74,14 @@ Util.prototype.incDate = function (date) {
   var pre = new Date(date);
   var next = new Date(pre.valueOf() + 24 * 3600 * 1000);
   console.log(next);
-  return (next.getFullYear() + '-' + format2(next.getMonth() + 1) + '-' + (format2(next.getDay() + 1))); // month and day start with 0
+  return (next.getFullYear() + '-' + format2(next.getMonth() + 1) + '-' + (format2(next.getDate()))); // month start with 0
 };
 
 function formatFilename(text) {
   if (typeof text === 'string') {
     text = text.replace(/[\s]/g, '');
-    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·]/g, '_');
+    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·？?]/g, '_');
+    text = text.replace(/[_]{2,}/, '_');
     return text;
   }
 }
