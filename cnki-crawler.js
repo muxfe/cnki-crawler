@@ -235,8 +235,13 @@ var CnkiCrawler = function () {
       page++;
       getResults();
     }).catch(function (e) {
-      console.log('====================next day====================')
-      nextDay();
+      if (_logger['n_failure'] > 3) {
+        console.log('>>>failure too many, redownloading this day<<<');
+        restart();
+      } else {
+        console.log('====================next day====================')
+        nextDay();
+      }
     });
   }
 
