@@ -41,6 +41,7 @@ run `node index.js`
 
 1. on Linux, copy `chromedriver` to `/usr/bin`, on Windows, copy `chromedriver.exe` to repo dir.
 1. 程序按天下载，下载路径为 `[repo]/downloads/[year]/[month]/[day]`
+1. 启动程序后有 30 秒时间登录，点击登录后不用再做任何操作
 1. 每天的下载目录下会有一个 json 文件，记录下载情况，可能会漏下和重下，但是可以通过这个日志文件补漏(起至日期设为这一天，重新运行程序即可)
 1. 程序每下载完一天后会重启，并切换一次入口，暂时只支持切换 37 和 46 入口
 1. 全程无需手工干预，起至日期填写一年即可，程序如遇致命错误关闭，重新运行即可(`node index.js`)
@@ -50,3 +51,20 @@ run `node index.js`
 ## Error Handling
 
 * 出现 alert，响应头/请求头，验证码等错误浏览器会自动重启，按照日志下载未下载的文档
+* 设置错误率控制，大于 3 个失败就重新下载当天
+
+## Issue Tracker
+
+* 出现 `angle_platform_impl.cc` 错误
+  更 DirectX 有关，尝试更新或修复
+* 出现 `WebElment not clickable` 错误而频繁重启
+  分辨率问题，导致要点击的元素被其他元素遮挡，有时间我会修复
+* `npm install` 安装时间过长，或安装失败
+  重新运行命令
+* Linux 下（UTF-8编码）文件名会乱码，检测下载文件时会自动转码，但是不会修改文件名，可以用 `convmv` 工具批量转码，以 Ubuntu 为例，
+  ```
+  sudo apt-get install convmv
+  cd [repo]/downloads
+  convmv -f utf8 -t iso-8859-1 -r --notest *
+  convmv -f gbk -t utf8 -r --notest *
+  ```

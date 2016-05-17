@@ -73,7 +73,7 @@ Util.prototype.load = function (filename) {
 Util.prototype.incDate = function (date) {
   var pre = new Date(date);
   var next = new Date(pre.valueOf() + 24 * 3600 * 1000);
-  console.log(next);
+  // console.log(next);
   return (next.getFullYear() + '-' + format2(next.getMonth() + 1) + '-' + (format2(next.getDate()))); // month start with 0
 };
 

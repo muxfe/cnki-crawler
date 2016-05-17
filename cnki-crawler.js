@@ -83,7 +83,9 @@ var CnkiCrawler = function () {
 
   // goto result iframe
   function gotoResultFrame() {
-    _driver.wait(until.elementLocated(By.id('iframeResult')), WAIT * 1000, 'load result timeout.\nquit.').then(function () {
+    _driver.executeScript('window.scrollTo(0, 10);').then(function () { // fix up WebElment not clickable
+      return _driver.wait(until.elementLocated(By.id('iframeResult')), WAIT * 1000, 'load result timeout.\nquit.');
+    }).then(function () {
       return _driver.switchTo().frame('iframeResult');
     }).then(function () {
       console.log('result iframe loaded.');
@@ -98,6 +100,9 @@ var CnkiCrawler = function () {
       return _driver.findElement(By.css('#id_grid_display_num')).findElement(By.partialLinkText('50')).click();
     }).then(function () {
       getResults();
+    }, function (e) {
+      console.log(e.message);
+
     });
   };
 
@@ -254,6 +259,7 @@ var CnkiCrawler = function () {
       _config['enter'] = '46';
     }
     restartTimes = 0;
+    WAIT = 30;
     if (isEnd()) {
       console.log('------------------------------------------');
       console.log('----------------ALL DOWN------------------');
@@ -306,8 +312,8 @@ var CnkiCrawler = function () {
         console.log('downloading...');
         return _driver.findElement(By.partialLinkText('PDF下载')).click();
       }, function (e) {// wait error
-        console.log('+++++download time too lang...restart later...+++++');
-        promise.rejected(e);
+        console.log('!!!checkcode!!!');
+        promise.rejected(Error('checkcode'));
       }).then(function () {
         return _driver.sleep(_config['sleeptime'] * 1000);
       }, function (e) {
@@ -353,8 +359,13 @@ var CnkiCrawler = function () {
       }).then(function () {
         download(data, index + 1);
       }).catch(function (e) {
-        console.log(e);
-        restart();
+        if (e.message === 'checkcode') {
+          _driver.close();
+          download(data, index);
+        } else {
+          console.log(e);
+          restart();
+        }
       });
     }
   }
