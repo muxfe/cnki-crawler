@@ -56,12 +56,16 @@ run `node index.js`
 ## Issue Tracker
 
 * 出现 `angle_platform_impl.cc` 错误
+
   更 DirectX 有关，尝试更新或修复
 * 出现 `WebElment not clickable` 错误而频繁重启
+
   分辨率问题，导致要点击的元素被其他元素遮挡，有时间我会修复
 * `npm install` 安装时间过长，或安装失败
+
   重新运行命令
 * Linux 下（UTF-8编码）文件名会乱码，检测下载文件时会自动转码，但是不会修改文件名，可以用 `convmv` 工具批量转码，以 Ubuntu 为例，
+
   ```
   sudo apt-get install convmv
   cd [repo]/downloads

@@ -58,6 +58,7 @@ var CnkiCrawler = function () {
   var WAIT = 30;
   var page = 1;
   var failedTimes = 0;
+  var checkcodeTimes = 0;
 
   // chrome option
   var chromeOption = new chrome.Options();
@@ -156,6 +157,7 @@ var CnkiCrawler = function () {
       WAIT += 1 * restartTimes;
       page = 1;
       failedTimes = 0;
+      checkcodeTimes = 0;
 
       // chrome driver
       _driver = new webdriver.Builder()
@@ -307,7 +309,13 @@ var CnkiCrawler = function () {
       }).then(function () {
         return switchRight();
       }).then(function () {
-        return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), WAIT * 1000, 'wait pdf download timeout.\nquit.'));
+        return _driver.getTitle();
+      }).then(function (title) {
+        if (title === '中国知网') { // checkcode
+          promise.rejected(Error('checkcode'));
+        } else {
+          return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), WAIT * 1000, 'wait pdf download timeout.\nquit.'));
+        }
       }).then(function () {
         console.log('downloading...');
         return _driver.findElement(By.partialLinkText('PDF下载')).click();
@@ -336,7 +344,7 @@ var CnkiCrawler = function () {
           log.filename = exist;
         } else { // failed
           failedTimes++;
-          console.log('failed times: ' + failedTimes);
+          console.log('>>>failed times: ' + failedTimes);
           if (failedTimes > 10) {
             console.log('failed too many times, restart later...');
             restart();
@@ -360,6 +368,11 @@ var CnkiCrawler = function () {
         download(data, index + 1);
       }).catch(function (e) {
         if (e.message === 'checkcode') {
+          checkcodeTimes++;
+          console.log('>>>checkcode times: ' + checkcodeTimes);
+          if (checkcodeTimes > 10) {
+            restart();
+          }
           _driver.close();
           download(data, index);
         } else {
@@ -417,7 +430,7 @@ var CnkiCrawler = function () {
   // save cookies to local disk
   function saveCookies() {
     // save cookies
-    _driver.manage().getCookies().then(function (cookies) {
+    return _driver.manage().getCookies().then(function (cookies) {
       // console.log(cookies);
       fs.writeFile(COOKIE, JSON.stringify(cookies, null, 2), (err) => {
         if (err) {
@@ -434,13 +447,15 @@ var CnkiCrawler = function () {
     if (Util.isExist(COOKIE)) {
       console.log('try to login with cookie...');
       loadCookies();
+      return _driver.sleep(3 * 1000);
     } else {
       console.log('cookie not exist.\nplease login by hands in 30 seconds...');
       // dirver will quit if not login in 30 seconds
-      _driver.wait(until.elementLocated(By.css('div.login > font')), 30 * 1000, 'you are not logged...\nquit.');
-      // login success
-      console.log('login success.');
-      saveCookies();
+      _driver.wait(until.elementLocated(By.css('div.login > font')), 30 * 1000, 'you are not logged...\nquit.').then(function () {
+        // login success
+        console.log('login success.');
+        return saveCookies();
+      });
     }
   }
 };
