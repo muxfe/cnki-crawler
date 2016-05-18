@@ -18,9 +18,16 @@ var Logger = function (date, source) {
     n_success: 0
   };
 
-  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads' + Util.PATH_SEP + source;
+  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads';
 
   // console.log(LOGS);
+
+  if (!Util.isExist(LOGS)) {
+    fs.mkdirSync(LOGS);
+  }
+
+  // source
+  LOGS += Util.PATH_SEP + source;
 
   if (!Util.isExist(LOGS)) {
     fs.mkdirSync(LOGS);

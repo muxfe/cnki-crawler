@@ -84,13 +84,15 @@ var CnkiCrawler = function () {
 
   // goto result iframe
   function gotoResultFrame() {
-    _driver.executeScript('window.scrollTo(0, 10);').then(function () { // fix up WebElment not clickable
+    _driver.executeScript('window.scrollTo(0, 50);').then(function () { // fix up WebElment not clickable
       return _driver.wait(until.elementLocated(By.id('iframeResult')), WAIT * 1000, 'load result timeout.\nquit.');
     }).then(function () {
       return _driver.switchTo().frame('iframeResult');
+    }, function (e) {
+      promise.projected(e);
     }).then(function () {
       console.log('result iframe loaded.');
-      return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), WAIT * 1000, 'wait 50 per page timeout.\nquit.');
+      return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), 5 * 1000, 'wait 50 per page timeout.\nquit.');
     }).then(function () {
       // sort
       return _driver.findElement(By.partialLinkText('报纸日期')).click();
@@ -101,9 +103,6 @@ var CnkiCrawler = function () {
       return _driver.findElement(By.css('#id_grid_display_num')).findElement(By.partialLinkText('50')).click();
     }).then(function () {
       getResults();
-    }, function (e) {
-      console.log(e.message);
-
     });
   };
 
@@ -264,6 +263,7 @@ var CnkiCrawler = function () {
 
   // next day
   function nextDay() {
+    console.log('>>>>>>>>>>' + _config['date'] + ' DOWN!<<<<<<<<<<');
     _config['date'] = Util.incDate(_config['date']);
     Util.save(CONFIG, _config);
     if (_config['auto_toggle_enter']) {
@@ -277,7 +277,7 @@ var CnkiCrawler = function () {
       console.log('------------------------------------------');
       _driver.quit();
     } else {
-      console.log(_config);
+      console.log('>>>>>>>>>>failure: ' + _logger.get('n_failure') + '<<<<<<<<<<');
       restart();
     }
   }
@@ -303,24 +303,45 @@ var CnkiCrawler = function () {
         return data[index].getAttribute('href');
       }).then(function (h) {
         href = h;
+        var exist = Util.existFile(text, _logger.path.day);
         if (_logger.isExist(text)) {
-          console.log('skip [' + indexOfPaper + ']<' + text + '> ...');
+          console.log('skip [' + indexOfPaper + '/' + data.length + ']<' + text + '> ...');
           download(data, index + 1);
           return;
+        } else if (exist) { // avoid redownload
+          var log = {url: href, index: indexOfPaper};
+          console.log('<' + exist + '> alreay exist.');
+          log.filename = exist;
+          _logger.put(text, log);
+          download(data, index + 1);
+          return;
+        } else {
+          console.log('------------------------------------------------------------------------');
+          console.log('start download [' + indexOfPaper + '/' + data.length + ']<' + text + '> ...');
+          return data[index].click();
         }
-        console.log('------------------------------------------------------------------------');
-        console.log('start download [' + indexOfPaper + ']<' + text + '> ...');
-        return data[index].click();
       }).then(function () {
-        return _driver.sleep(1 * 1000);
+        return _driver.sleep(3 * 1000);
       }).then(function () {
         return switchRight();
       }).then(function () {
         return _driver.getTitle();
       }).then(function (title) {
-        if (title === '中国知网') { // checkcode
+        console.log(title);
+        if (title.indexOf('无法加载') > -1) { // cannot load
           promise.rejected(Error('checkcode'));
-        } else {
+        } else if (!title) {
+          failedTimes++;
+          console.log('>>>failed times: ' + failedTimes);
+          if (failedTimes > 10) {
+            if (_config['auto_toggle_enter']) {
+              toggleEnter();
+            }
+            console.log('failed too many times, restart later...');
+            restart();
+          }
+          return _driver.navigate().refresh();
+        } {
           return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), WAIT * 1000, 'wait pdf download timeout.\nquit.'));
         }
       }).then(function () {
@@ -331,8 +352,6 @@ var CnkiCrawler = function () {
         promise.rejected(Error('checkcode'));
       }).then(function () {
         return _driver.sleep(_config['sleeptime'] * 1000);
-      }, function (e) {
-        promise.rejected(e);
       }).then(function () {
         return _driver.getAllWindowHandles();
       }).then(function (handles) {
@@ -375,12 +394,14 @@ var CnkiCrawler = function () {
       }).then(function () {
         return _driver.close(); // close pdf download page
       }).then(function () {
+        return _driver.sleep(5 * 1000);
+      }).then(function () {
         download(data, index + 1);
       }).catch(function (e) {
         if (e.message === 'checkcode') {
           checkcodeTimes++;
           console.log('>>>checkcode times: ' + checkcodeTimes);
-          if (checkcodeTimes > 10) {
+          if (checkcodeTimes > 3) {
             if (_config['auto_toggle_enter']) {
               toggleEnter();
             }
