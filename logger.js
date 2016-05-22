@@ -18,7 +18,7 @@ var Logger = function (date, source) {
     n_success: 0
   };
 
-  const LOGS = process.cwd() + Util.PATH_SEP + 'downloads';
+  var LOGS = process.cwd() + Util.PATH_SEP + 'downloads';
 
   // console.log(LOGS);
 
@@ -27,7 +27,7 @@ var Logger = function (date, source) {
   }
 
   // source
-  LOGS += Util.PATH_SEP + source;
+  LOGS = LOGS + Util.PATH_SEP + source;
 
   if (!Util.isExist(LOGS)) {
     fs.mkdirSync(LOGS);
@@ -92,6 +92,7 @@ var Logger = function (date, source) {
     fs.writeFile(_path.log, JSON.stringify(_log, null, 2), (err) => {
       if (err) {
         console.log('save ' + _log.date + ' log failed.');
+        save();
       }
     });
   }

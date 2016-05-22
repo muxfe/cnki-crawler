@@ -1,9 +1,9 @@
 {
-  "enter": "37",
-  "username": "labsse1",
+  "enter": "46",
+  "username": "wangwen1",
   "source": "中国证券报",
-  "date": "2010-02-24",
-  "dateend": "2010-05-31",
-  "sleeptime": 20,
+  "date": "2010-07-26",
+  "dateend": "2010-09-31",
+  "sleeptime": 5,
   "auto_toggle_enter": false
 }

@@ -58,7 +58,10 @@ var CnkiCrawler = function () {
   var WAIT = 30;
   var page = 1;
   var failedTimes = 0;
-  var checkcodeTimes = 0;
+  var unloadTimes = 0;
+  var FAILED = 5;
+  var THRESHOLD = 2;
+  var UNLOAD = 5;
 
   // chrome option
   var chromeOption = new chrome.Options();
@@ -91,15 +94,17 @@ var CnkiCrawler = function () {
     }, function (e) {
       promise.projected(e);
     }).then(function () {
-      console.log('result iframe loaded.');
+      console.log('get search result.');
       return _driver.wait(until.elementLocated(By.css('#id_grid_display_num a:last-child')), 5 * 1000, 'wait 50 per page timeout.\nquit.');
     }).then(function () {
       // sort
+      console.log('sort by paper date asc.');
       return _driver.findElement(By.partialLinkText('报纸日期')).click();
     }).then(function () {
       return _driver.findElement(By.partialLinkText('报纸日期')).click();
     }).then(function () {
       // click 50 per page
+      console.log('select 50/page.');
       return _driver.findElement(By.css('#id_grid_display_num')).findElement(By.partialLinkText('50')).click();
     }).then(function () {
       getResults();
@@ -111,11 +116,11 @@ var CnkiCrawler = function () {
     // find all paper elements
     _driver.findElements(By.css('a.fz14')).then(function (data) {
       if (!data || data.length === 0) { // no result
-        console.log('==========Empty ' + _config['date'] + ' ==========');
+        console.log('==========[' + _config['date'] + ' is Empty!]==========');
         nextDay();
         return;
       }
-      console.log('==========Page: ' + page + '==========Total: ' + data.length + '==========');
+      console.log('==========[Page: ' + page + ']==========[Total: ' + data.length + ']==========');
       // handle result
       download(data, 0);
     }, function (e) {
@@ -125,14 +130,15 @@ var CnkiCrawler = function () {
 
   // search
   function search() {
+    console.log('==========[Start downloading ' + _config['date'] + ']==========');
     _driver.findElement(By.id('txt_1_sel')).findElement(By.css('option[value="LY"]')).click().then(function () {
-      console.log('set data source...');
+      console.log('set data source: [' + _config['source'] + ']...');
       return _driver.findElement(By.id('txt_1_value1')).sendKeys(_config['source']);
     }).then(function () {
-      console.log('set search date_from...');
+      console.log('set search date_from: [' + _config['date'] + ']...');
       return _driver.findElement(By.id('publishdate_from')).sendKeys(_config['date']);
     }).then(function () {
-      console.log('set search date_to...');
+      console.log('set search date_to: ' + _config['date'] + '...');
       return _driver.findElement(By.id('publishdate_to')).sendKeys(_config['date']);
     }).then(function () {
       return _driver.sleep(1 * 1000);
@@ -156,7 +162,7 @@ var CnkiCrawler = function () {
       WAIT += 1 * restartTimes;
       page = 1;
       failedTimes = 0;
-      checkcodeTimes = 0;
+      unloadTimes = 0;
 
       // chrome driver
       _driver = new webdriver.Builder()
@@ -172,7 +178,7 @@ var CnkiCrawler = function () {
     }).then(function () {
       var sleep = restartTimes * 10;
       console.log('>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<');
-      console.log('>>>>>>>>>>restart after sleep ' + sleep + 's.<<<<<<<<<<');
+      console.log('>>>>>>>>>[restart after sleep ' + sleep + 's.]<<<<<<<<<');
       console.log('>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<');
       return _driver.sleep(sleep * 1000);
     }).then(function () {
@@ -185,7 +191,6 @@ var CnkiCrawler = function () {
     if (isEnd()) {
       console.log(_config['date'] + ' ~ ' + _config['dateend'] + ' is already downloaded.');
     }
-    console.log('==========Start downloading ' + _config['date'] + '==========');
     _driver.get(INDEX).then(function () {
       login();
     }).then(function () {
@@ -227,7 +232,7 @@ var CnkiCrawler = function () {
 
   // next page
   function nextPage() {
-    console.log('====================next page====================');
+    console.log('====================[next page]====================');
     switchRight().then(function () {
       return _driver.switchTo().frame('iframeResult');
     }).then(function () {
@@ -235,17 +240,17 @@ var CnkiCrawler = function () {
     }).then(function () {
       return _driver.sleep(_config['sleeptime'] * 1000);
     }, function (e) {
-      console.log('next page error.');
+      console.log('no more page.');
       promise.rejected(e);
     }).then(function () {
       page++;
       getResults();
     }).catch(function (e) {
-      if (_logger['n_failure'] > 3) {
-        console.log('>>>failure too many, redownloading this day<<<');
+      if (_logger['n_failure'] > THRESHOLD) {
+        console.log('>>>>>[failure too many, redownloading this day]<<<<<');
         restart();
       } else {
-        console.log('====================next day====================')
+        console.log('====================[next day]===================')
         nextDay();
       }
     });
@@ -258,12 +263,13 @@ var CnkiCrawler = function () {
     } else {
       _config['enter'] = '46';
     }
+    console.log('>>>>>>>>>>[switch enter to ' + _config['enter'] +']<<<<<<<<<<');
     Util.save(CONFIG, _config);
   }
 
   // next day
   function nextDay() {
-    console.log('>>>>>>>>>>' + _config['date'] + ' DOWN!<<<<<<<<<<');
+    console.log('>>>>>>>>>>[' + _config['date'] + ' Finished!]<<<<<<<<<<');
     _config['date'] = Util.incDate(_config['date']);
     Util.save(CONFIG, _config);
     if (_config['auto_toggle_enter']) {
@@ -272,12 +278,12 @@ var CnkiCrawler = function () {
     restartTimes = 0;
     WAIT = 30;
     if (isEnd()) {
-      console.log('------------------------------------------');
-      console.log('----------------ALL DOWN------------------');
-      console.log('------------------------------------------');
+      console.log('-----------------------------------------------------------');
+      console.log('----------[' + _config['date'] + ']-[' + _config['dateend'] + ']-has finished!----------');
+      console.log('-----------------------------------------------------------');
       _driver.quit();
     } else {
-      console.log('>>>>>>>>>>failure: ' + _logger.get('n_failure') + '<<<<<<<<<<');
+      console.log('>>>>>>>>>>[failure: ' + _logger.get('n_failure') + ']<<<<<<<<<<');
       restart();
     }
   }
@@ -291,9 +297,14 @@ var CnkiCrawler = function () {
     var text = '';
     var href = '';
     if (index === data.length) {
-      nextPage();
+      if (index < 50) {
+        nextDay();
+      } else {
+        nextPage();
+      }
     } else {
       var indexOfPaper = (index + 1) + (page - 1) * 50;
+      var totalItems = (page - 1) * 50 + data.length;
       switchRight().then(function () {
         return _driver.switchTo().frame('iframeResult');
       }).then(function () {
@@ -305,19 +316,19 @@ var CnkiCrawler = function () {
         href = h;
         var exist = Util.existFile(text, _logger.path.day);
         if (_logger.isExist(text)) {
-          console.log('skip [' + indexOfPaper + '/' + data.length + ']<' + text + '> ...');
+          console.log('skip [' + indexOfPaper + '/' + totalItems + ']<' + text + '> ...');
           download(data, index + 1);
           return;
         } else if (exist) { // avoid redownload
           var log = {url: href, index: indexOfPaper};
-          console.log('<' + exist + '> alreay exist.');
+          console.log('skip [' + indexOfPaper + '/' + totalItems + ']<<' + exist + '>>, alreay exist.');
           log.filename = exist;
           _logger.put(text, log);
           download(data, index + 1);
           return;
         } else {
           console.log('------------------------------------------------------------------------');
-          console.log('start download [' + indexOfPaper + '/' + data.length + ']<' + text + '> ...');
+          console.log('start download [' + indexOfPaper + '/' + totalItems + ']<' + text + '> ...');
           return data[index].click();
         }
       }).then(function () {
@@ -326,61 +337,88 @@ var CnkiCrawler = function () {
         return switchRight();
       }).then(function () {
         return _driver.getTitle();
-      }).then(function (title) {
-        console.log(title);
-        if (title.indexOf('无法加载') > -1) { // cannot load
-          promise.rejected(Error('checkcode'));
-        } else if (!title) {
-          failedTimes++;
-          console.log('>>>failed times: ' + failedTimes);
-          if (failedTimes > 10) {
-            if (_config['auto_toggle_enter']) {
-              toggleEnter();
-            }
-            console.log('failed too many times, restart later...');
-            restart();
-          }
-          return _driver.navigate().refresh();
-        } {
+      }).then(function (title) { // unnormal: 40x, 50x, checkcode
+        if (!title || title.replace(/[\s]*/g, '').indexOf(text.replace(/[\s]*/g, '')) === -1) { // cannot load
+          promise.rejected(Error('unload'));
+        } else {
           return _driver.wait(until.elementLocated(By.partialLinkText('PDF下载'), WAIT * 1000, 'wait pdf download timeout.\nquit.'));
         }
       }).then(function () {
         console.log('downloading...');
         return _driver.findElement(By.partialLinkText('PDF下载')).click();
       }, function (e) {// wait error
-        console.log('!!!checkcode!!!');
-        promise.rejected(Error('checkcode'));
+        console.log(e.message);
+        promise.rejected(Error('unload'));
       }).then(function () {
         return _driver.sleep(_config['sleeptime'] * 1000);
       }).then(function () {
         return _driver.getAllWindowHandles();
       }).then(function (handles) {
         if (handles.length > 4) {
-          console.log('try to close alert...');
-          return acceptAlert(); // handle alert('用户并发数已满')
+          return switchRight().then(function () {
+            return _driver.getTitle();
+          }).then(function (title) {
+            console.log(title);
+            if (title) { // maybe checkcode(title=='中国知网')
+              console.log('!!!checkcode!!!');
+              return _driver.close().then(function () {
+                promise.rejected(Error('unload'));
+              });
+            } else { // long time unloading
+              return _driver.sleep(_config['sleeptime'] * 1000).then(function () {
+                return _driver.getAllWindowHandles();
+              }).then(function (handles) {
+                if (handles.length > 4) {
+                  return _driver.close().then(function () {
+                    promise.rejected(Error('unload'));
+                  });
+                }
+              });
+            }
+          }, function (e) {
+            console.log(e);
+            console.log(">>>>>[try to close alert]<<<<<");
+            return _driver.wait(until.alertIsPresent(), 1 * 1000, 'wait alert timeout.\n').then(function () {
+              return _driver.switchTo().alert().dismiss();
+            }).then(function () {
+              console.log('>>>>>[ignore open alert]<<<<<');
+              promise.rejected(Error('unload'));
+            }).thenCatch(function (e) {
+              console.log(">>>>>[close alert failed]<<<<<");
+              return _driver.getAllWindowHandles().then(function (handles) {
+                return _driver.switchTo().window(handles[handles.length - 2]);
+              }).then(function () {
+                return _driver.close();
+              }).then(function () {
+                return switchRight();
+              }).then(function () {
+                promise.rejected(Error('unload'));
+              });
+            });
+          });
         }
-      }).then(function () {
-        return _driver.sleep(1 * 1000);
       }).then(function () {
         // detect if not download success
         var exist = Util.existFile(text, _logger.path.day);
         var log = {url: href, index: indexOfPaper};
+        _logger.put(text, log);
         if (exist) { // success
           console.log('<' + exist + '> download success.');
           log.filename = exist;
+          _logger.put(text, log);
         } else { // failed
           failedTimes++;
-          console.log('>>>failed times: ' + failedTimes);
-          if (failedTimes > 10) {
+          console.log('>>>>>[failed times: ' + failedTimes + '/' + FAILED + ']<<<<<');
+          if (failedTimes > FAILED) {
             if (_config['auto_toggle_enter']) {
               toggleEnter();
             }
-            console.log('failed too many times, restart later...');
+            console.log('>>>[failed too many times, restart later]<<<');
             restart();
           }
           console.log('<' + text + '> download failed.');
+          promise.rejected(Error('unload'));
         }
-        _logger.put(text, log);
       }).then(function () {
         return _driver.sleep(1 * 1000);
       }).then(function () {
@@ -398,20 +436,25 @@ var CnkiCrawler = function () {
       }).then(function () {
         download(data, index + 1);
       }).catch(function (e) {
-        if (e.message === 'checkcode') {
-          checkcodeTimes++;
-          console.log('>>>checkcode times: ' + checkcodeTimes);
-          if (checkcodeTimes > 3) {
+        if (e.message === 'unload') {
+          unloadTimes++;
+          console.log('>>>unload times: ' + unloadTimes + '/' + UNLOAD);
+          if (unloadTimes > UNLOAD) {
+            console.log('>>>[unload times too many, restart later]<<<');
             if (_config['auto_toggle_enter']) {
               toggleEnter();
             }
             restart();
+          } else {
+            return _driver.sleep(1 * 1000).then(function () {
+              return switchRight();
+            }).then(function () {
+              return _driver.close();
+            }).then(function () {
+              console.log('redownloading...');
+              download(data, index);
+            });
           }
-          return _driver.sleep(10 * 1000).then(function () {
-            return _driver.close();
-          }).then(function () {
-            download(data, index);
-          });
         } else {
           console.log(e);
           restart();
@@ -430,20 +473,18 @@ var CnkiCrawler = function () {
   // ignore alert
   function acceptAlert() {
     return switchRight().then(function() {
-      return _driver.wait(until.alertIsPresent(), 1 * 1000, 'wait alert timeout.');
+      return _driver.wait(until.alertIsPresent(), 3 * 1000, 'wait alert timeout.');
     }).then(function () {
       console.log('ignore open alert.');
       return _driver.switchTo().alert().dismiss();
     }, function (e) {
-      promise.rejected(e);
+      console.log(e.message);
     }).thenCatch(function (e) {
       if (!(e instanceof error.NoSuchAlertError)) {
         console.log(e);
       } else {
         console.log('no alert open');
       }
-    }).catch(function (e) {
-      console.log('wait timeout');
     });
   }
 

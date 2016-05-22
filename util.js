@@ -32,6 +32,7 @@ Util.prototype.date2path = function (date) {
 Util.prototype.existFile = function (text, path) {
   text = formatFilename(text);
   var ls = fs.readdirSync(path);
+  var isLong = false;
   for (var i = 0; i < ls.length; i++) {
     var filename = ls[i].replace(/[\s][\(][0-9]+[\)]/g, '');
     if (process.platform === 'linux') { // linux默认 utf-8 编码，中文文件名会乱码
@@ -44,11 +45,16 @@ Util.prototype.existFile = function (text, path) {
       // console.log('before: ' + ls[i]);
       // console.log('after: ' + filename);
     }
-    if (filename.length < 38 && filename.indexOf(text) > -1) {
-      return filename;
-    } else if (filename.length >= 38 && filename.substring(0, 16).replace('_', '').indexOf(text.substring(0, 10)) > -1) {
-      // long filename will not match text, so cut pre 16 string to match
-      return filename;
+    if (filename.indexOf('_省略_') > -1) {
+      isLong = true;
+    }
+    var _fname = filename;
+    filename = filename.replace(/[_]/g, '');
+    if (!isLong && filename.indexOf(text) > -1) {
+      return _fname;
+    } else if (isLong && filename.substring(0, 12).indexOf(text.substring(0, 10)) > -1) {
+      // long filename will not match text, so cut pre 12 string to match
+      return _fname;
     }
   }
   return null;
@@ -79,9 +85,8 @@ Util.prototype.incDate = function (date) {
 
 function formatFilename(text) {
   if (typeof text === 'string') {
-    text = text.replace(/[\s]/g, '');
-    text = text.replace(/["'“”《》:：，。,;；@!！~`%\^…$￥（）\[\]{}“”*+=|、.()·？?——\\&/]/g, '_');
-    text = text.replace(/[_]{2,}/, '_');
+    text = text.replace(/[^\u4e00-\u9fa5\w]/g, ''); // 非中文，英文或数字，_
+    text = text.replace(/[_]/g, '');
     return text;
   }
 }
